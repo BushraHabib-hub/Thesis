@@ -102,7 +102,9 @@ async function process(foldername, filename, code) {
         await executeCommand(`cd ${fullFolderPath} && wasm-pack build --target web`);
         console.log("WebAssembly module built successfully");
         
-        return true;
+        // Return the path to the generated package folder
+        const packageFolderPath = path.join(fullFolderPath, 'pkg');
+        return packageFolderPath;
     } catch (error) {
         console.error(error);
         return false;

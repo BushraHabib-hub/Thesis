@@ -66,9 +66,38 @@
             })
             .then(response => {
                 if (response.ok) {
-                    alert("Rust code submitted successfully.");
+                    // Get the filename from the Content-Disposition header if available
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    let filename = `${functionName}_package.zip`;
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    // Convert the response to a blob
+                    return response.blob().then(blob => {
+                        // Create a URL for the blob
+                        const url = window.URL.createObjectURL(blob);
+                        
+                        // Create a temporary link element
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        
+                        // Append to the document, click it, and remove it
+                        document.body.appendChild(a);
+                        a.click();
+                        
+                        // Clean up
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        
+                        alert("Download started for your compiled WASM package");
+                    });
                 } else {
-                    alert("Failed to submit Rust code.");
+                    alert("Failed to compile Rust code.");
                 }
             })
             .catch(error => {
