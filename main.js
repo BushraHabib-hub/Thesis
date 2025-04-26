@@ -1,34 +1,85 @@
 const { exec } = require('child_process');
 const fs = require('fs');
+const util = require('util');
+const writeFileAsync = util.promisify(fs.writeFile);
 
-function executeCommand(cmd){
-    promise = new Promise( (resolve,reject) => {
+function executeCommand(cmd) {
+    return new Promise((resolve, reject) => {
         exec(cmd, (err, stdout, stderr) => {
             if (err) {
+                console.log(stderr);
                 reject(stderr);                
                 return;
             }      
             
+            console.log(stdout);
+            console.log("command successful");
             resolve(stdout);                    
         });        
     });
-    
-    return promise.then( (result) => {console.log(result); console.log("command successful");},
-                         (result) => {console.log(result)} );                      
 }
+async function writeCodeToLib(code) {
+    try {
+        await writeFileAsync(filePath, code);
+        console.log(`File written to ${filePath}`);
+        return true;
+    } catch (err) {
+        console.error(err);
+        return false;
+    }
+}
+async function addDepsToCargo(foldername) {
+    try {
+        const cargoPath = `${foldername}/Cargo.toml`;
+        const data = await fs.promises.readFile(cargoPath, 'utf-8');
+        const lines = data.split('\n');
 
-function process(foldername, filename, code) {
-    return executeCommand("cargo new " + foldername + " --lib").then(() => {
-        const filePath = `${foldername}/src/lib.rs`;
-        fs.writeFile(filePath, code, err => {
-            if (err) {
-                console.error(err);
-                return false;
+        let dependenciesFound = false;
+        let libFound = false;
+        let modifiedLines = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            modifiedLines.push(lines[i]);
+            
+            if (lines[i].trim() === '[dependencies]') {
+                dependenciesFound = true;
+                // Add dependencies if the section is found
+                modifiedLines.push('wasm-bindgen = "0.2"');
+                modifiedLines.push('serde = { version = "1.0", features = ["derive"] }');
+                modifiedLines.push('serde_json = "1.0"');
+                modifiedLines.push('serde-wasm-bindgen = "0.5"');
+            } else if (lines[i].trim() === '[lib]') {
+                libFound = true;
+                modifiedLines.push('crate-type = ["cdylib", "rlib"]');
             }
-            console.log(`File written to ${filePath}`);
-            return true;
-        });
-    });
+        }
+        
+        if (!libFound) {
+            modifiedLines.push('');
+            modifiedLines.push('[lib]');
+            modifiedLines.push('crate-type = ["cdylib", "rlib"]');
+        }
+        
+        const updatedContent = modifiedLines.join('\n');
+        await fs.promises.writeFile(cargoPath, updatedContent, 'utf-8');
+        console.log(`Updated ${cargoPath} with dependencies and lib configuration`);
+        return true;
+    } catch (err) {
+        console.error(`Error updating ${cargoPath}:`, err);
+        return false;
+    }
+}
+async function process(foldername, filename, code) {
+    try {
+        await executeCommand("cargo new " + foldername + " --lib");
+        const filePath = `${foldername}/src/lib.rs`;
+        await writeCodeToLib(code);
+        await addDepsToCargo(foldername);
+        
+    } catch (error) {
+        console.error(error);
+        return false;
+    }
 }
 
 function list(){
