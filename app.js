@@ -46,7 +46,7 @@ app.get('/compare', (req, res) => {
 });
 
 app.post('/generate', (req, res) => {
-  if (main.process('output',req.body['fname'] + '.wasm',req.body['wasm']) ){
+  if (main.process(req.body['fname'],req.body['fname'] + '.wasm',req.body['wasm']) ){
     res.send('code generated successfully <br/> <a href="/">List</a>');
   }
   else{

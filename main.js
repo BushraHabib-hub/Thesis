@@ -1,7 +1,9 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 const util = require('util');
+const path = require('path');
 const writeFileAsync = util.promisify(fs.writeFile);
+const mkdirAsync = util.promisify(fs.mkdir);
 
 function executeCommand(cmd) {
     return new Promise((resolve, reject) => {
@@ -71,24 +73,33 @@ async function addDepsToCargo(foldername) {
 }
 async function process(foldername, filename, code) {
     try {
-        await executeCommand("cargo new " + foldername + " --lib");
-        const filePath = `${foldername}/src/lib.rs`;
-        await writeCodeToLib(filePath, code);
-        await addDepsToCargo(foldername);
-        
-        // Check if wasm32 target is installed, if not install it
-        try {
-            console.log("Checking for web");
-            await executeCommand("rustup target list --installed | findstr web");
-        } catch (e) {
-            console.log("web target not found, installing...");
-            await executeCommand("rustup target add web");
+        // Create output directory if it doesn't exist
+        const outputDir = path.join(__dirname, 'output');
+        if (!fs.existsSync(outputDir)) {
+            await mkdirAsync(outputDir);
+            console.log(`Created output directory: ${outputDir}`);
         }
+        
+        // Set the full project path inside the output directory
+        const fullFolderPath = path.join(outputDir, foldername);
+        
+        // Check if folder already exists and delete it if it does
+        if (fs.existsSync(fullFolderPath)) {
+            console.log(`Folder ${fullFolderPath} already exists. Deleting...`);
+            await fs.promises.rm(fullFolderPath, { recursive: true, force: true });
+            console.log(`Deleted existing folder ${fullFolderPath}`);
+        }
+        
+        // Create new Rust project in the output directory
+        await executeCommand(`cargo new ${fullFolderPath} --lib`);
+        const filePath = path.join(fullFolderPath, 'src', 'lib.rs');
+        await writeCodeToLib(filePath, code);
+        await addDepsToCargo(fullFolderPath);
         
         // Add compilation step
         console.log("Building WebAssembly module...");
         // Change to the project directory and build it
-        await executeCommand(`cd ${foldername} && wasm-pack   build --target web`);
+        await executeCommand(`cd ${fullFolderPath} && wasm-pack build --target web`);
         console.log("WebAssembly module built successfully");
         
         return true;
