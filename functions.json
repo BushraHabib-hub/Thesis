@@ -1,0 +1,14 @@
+{
+    "f1" : {
+        "name" : "f1",
+        "body" : "function f1() {\n   // f1 code here \n}" 
+    },
+    "f2" : {
+        "name" : "f2",
+        "body" : "function f2() {\n   // f2 code here \n}"
+    },
+    "f3" : {
+        "name" : "f3",
+        "body" : "function f3() {\n   // f3 code here \n}"
+    }
+}

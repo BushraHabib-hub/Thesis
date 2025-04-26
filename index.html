@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS & HTML Performance Analyzer</title>
+    <script src="https://unpkg.com/esprima@~4.0/dist/esprima.js"></script>
+    <script>
+        console.log("Esprima Loaded:", typeof esprima !== "undefined");
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .slow { color: red; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+    <div class="bg-white shadow-lg rounded-lg p-6 w-full max-w-2xl text-center">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">JavaScript & HTML Performance Analyzer</h1>
+        <input type="file" id="fileInput" accept=".js,.html" class="border rounded p-2 w-full mb-4">
+        <button onclick="analyzeFile()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Analyze</button>
+        <div id="output" class="mt-6 text-left p-4 bg-gray-50 rounded overflow-auto max-h-64"></div>
+    </div>
+    
+    <script>
+        let fileContent = "";
+let functionPerformance = [];
+
+async function analyzeFile() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files.length) {
+        alert('Please select a JavaScript or HTML file.');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    fileContent = await file.text();
+    
+    if (file.name.endsWith('.html')) {
+        fileContent = extractJSFromHTML(fileContent);
+    }
+    analyzeCode(fileContent);
+}
+
+function extractJSFromHTML(htmlContent) {
+    const scriptMatches = htmlContent.match(/<script[^>]*>([\s\S]*?)<\/script>/gi);
+    if (!scriptMatches) {
+        document.getElementById('output').textContent = 'No JavaScript found in the HTML file.';
+        return "";
+    }
+    return scriptMatches.map(script => script.replace(/<script[^>]*>|<\/script>/gi, '')).join('\n');
+}
+
+function analyzeCode(code) {
+    const output = document.getElementById('output');
+    output.innerHTML = '';
+    functionPerformance = [];
+    
+    const parsed = esprima.parseScript(code, { tolerant: true, loc: true });
+    
+    function traverse(node) {
+        if (node.type === 'FunctionDeclaration') {
+            functionPerformance.push({ name: node.id.name, loc: node.loc.start.line, time: 0 });
+        } else if (node.type === 'VariableDeclarator' && node.init && node.init.type === 'FunctionExpression') {
+            functionPerformance.push({ name: node.id.name, loc: node.loc.start.line, time: 0 });
+        } else if (node.type === 'MethodDefinition') {
+            functionPerformance.push({ name: node.key.name, loc: node.loc.start.line, time: 0 });
+        }
+        
+        for (let key in node) {
+            if (node[key] && typeof node[key] === 'object') {
+                traverse(node[key]);
+            }
+        }
+    }
+    traverse(parsed);
+    
+    if (!functionPerformance.length) {
+        output.textContent = 'No functions found.';
+        return;
+    }
+    
+    functionPerformance.forEach(func => measureExecutionTime(func));
+}
+
+function measureExecutionTime(func) {
+    const regex = new RegExp(`function\\s+${func.name}\\s*\\(([^)]*)\\)\\s*{([\\s\\S]*?)}\\s*$`, 'm');
+    const match = fileContent.match(regex);
+    
+    if (match) {
+        const functionContent = match[0];
+        
+        try {
+            const startTime = performance.now();
+            eval(functionContent);
+            const endTime = performance.now();
+            func.time = endTime - startTime;
+        } catch (e) {
+            func.time = Number.MAX_VALUE; // Assign max value if function has an error
+        }
+    } else {
+        func.time = Number.MAX_VALUE;
+    }
+    
+    if (functionPerformance.every(f => f.time !== 0)) {
+        displayResults();
+    }
+}
+
+function displayResults() {
+    functionPerformance.sort((a, b) => b.time - a.time);
+    const output = document.getElementById('output');
+    output.innerHTML = '<h2 class="text-lg font-bold mb-2">Function Performance</h2>';
+    
+    functionPerformance.forEach(func => {
+        output.innerHTML += `
+            <div class="text-gray-700 ${func.time > 100 ? 'slow' : ''}">
+                <button onclick="handleClick('${func.name}')" class="underline text-blue-500">
+                    ${func.name} (Line ${func.loc}) - ${func.time.toFixed(4)} ms
+                </button>
+            </div>
+        `;
+    });
+}
+
+function handleClick(name) {
+    console.log("Clicked function:", name);
+    const regex = new RegExp(`function\\s+${name}\\s*\\(([^)]*)\\)\\s*{([\\s\\S]*?)}\\s*$`, 'm');
+    const match = fileContent.match(regex);
+    
+    if (match) {
+        const functionContent = match[0];
+        sessionStorage.setItem(name, functionContent); // Store function code temporarily
+        window.location.href = `functionDetails?name=${encodeURIComponent(name)}`;
+    } else {
+        alert(`Function ${name} not found in the file.`);
+    }
+}
+
+
+    </script>
+</body>
+</html>
