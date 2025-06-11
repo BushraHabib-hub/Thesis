@@ -97,10 +97,19 @@ function measureExecutionTime(func) {
         const functionContent = match[0];
         
         try {
-            const startTime = performance.now();
-            eval(functionContent);
-            const endTime = performance.now();
-            func.time = endTime - startTime;
+            // Run the function 3 times and calculate average
+            let totalTime = 0;
+            const iterations = 3;
+            
+            for (let i = 0; i < iterations; i++) {
+                const startTime = performance.now();
+                eval(functionContent);
+                const endTime = performance.now();
+                totalTime += (endTime - startTime);
+            }
+            
+            // Calculate average time
+            func.time = totalTime / iterations;
         } catch (e) {
             func.time = Number.MAX_VALUE; // Assign max value if function has an error
         }
@@ -116,7 +125,7 @@ function measureExecutionTime(func) {
 function displayResults() {
     functionPerformance.sort((a, b) => b.time - a.time);
     const output = document.getElementById('output');
-    output.innerHTML = '<h2 class="text-lg font-bold mb-2">Function Performance</h2>';
+    output.innerHTML = '<h2 class="text-lg font-bold mb-2">Function Performance (Average of 3 runs)</h2>';
     
     functionPerformance.forEach(func => {
         output.innerHTML += `

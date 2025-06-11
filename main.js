@@ -216,7 +216,7 @@ ${originalCode.replace(
         
         // Write to output directory
         await writeFileAsync(outputFile, modifiedJS);
-        console.log(`Modified JavaScript file created at ${outputFile}`);
+        // console.log(`Modified JavaScript file created at ${outputFile}`);
         
         // If pkg directory exists, also write there directly
         if (fs.existsSync(pkgDir)) {
@@ -230,7 +230,7 @@ ${originalCode.replace(
         
         // Verify file was written correctly
         if (fs.existsSync(outputFile)) {
-            console.log(`Verified: File exists at ${outputFile} (size: ${fs.statSync(outputFile).size} bytes)`);
+            //console.log(`Verified: File exists at ${outputFile} (size: ${fs.statSync(outputFile).size} bytes)`);
             return path.resolve(outputFile); // Return absolute path
         } else {
             console.error(`Failed to create file at ${outputFile}`);
