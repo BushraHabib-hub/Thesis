@@ -120,7 +120,7 @@ async function process(foldername, filename, code, jsFileContent = null) {
                     
                     // Verify file exists and has content
                     if (fs.existsSync(modifiedJsPath)) {
-                        console.log(`Verified: File exists at ${modifiedJsPath} (size: ${fs.statSync(modifiedJsPath).size} bytes)`);
+                        //console.log(`Verified: File exists at ${modifiedJsPath} (size: ${fs.statSync(modifiedJsPath).size} bytes)`);
                     }
                 }
             } catch (jsError) {
@@ -139,7 +139,7 @@ async function process(foldername, filename, code, jsFileContent = null) {
 async function createModifiedJSFile(functionName, originalCode) {
     try {
         console.log(`Creating modified JS file for function: ${functionName}`);
-        console.log(`Original code length: ${originalCode.length} characters`);
+        //console.log(`Original code length: ${originalCode.length} characters`);
         
         // Parse the original function signature and body
         const funcRegex = new RegExp(`function\\s+${functionName}\\s*\\(([^)]*)\\)\\s*{([\\s\\S]*?)}\\s*$`, 'm');
@@ -222,7 +222,7 @@ ${originalCode.replace(
         if (fs.existsSync(pkgDir)) {
             try {
                 await writeFileAsync(pkgOutputFile, modifiedJS);
-                console.log(`Modified JavaScript file also created at ${pkgOutputFile} (for ZIP inclusion)`);
+                //console.log(`Modified JavaScript file also created at ${pkgOutputFile} (for ZIP inclusion)`);
             } catch (pkgWriteErr) {
                 console.error(`Error writing to pkg directory:`, pkgWriteErr);
             }

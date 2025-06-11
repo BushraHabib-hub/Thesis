@@ -51,10 +51,10 @@ app.post('/generate', async (req, res) => {
   // Log the received JS file name, preview, and full content for debugging
   if (req.body.jsFileName && req.body.jsFileContent) {
     const preview = req.body.jsFileContent.substring(0, 200) + (req.body.jsFileContent.length > 200 ? '...' : '');
-    console.log(`✅ JS file received: ${req.body.jsFileName}`);
-    console.log(`Preview: ${preview}`);
-    console.log('Full JS file content:');
-    console.log(req.body.jsFileContent);
+    // console.log(`✅ JS file received: ${req.body.jsFileName}`);
+    // console.log(`Preview: ${preview}`);
+    // console.log('Full JS file content:');
+    // console.log(req.body.jsFileContent);
   }
 
   // Process the WebAssembly compilation
@@ -67,44 +67,40 @@ app.post('/generate', async (req, res) => {
   
   if (result && req.body.jsFileContent && req.body.jsFileName) {
     try {
-      console.log(`Creating WebAssembly-integrated JS file for function: ${req.body['fname']}`);
+      //console.log(`Creating WebAssembly-integrated JS file for function: ${req.body['fname']}`);
       modifiedJsFilePath = await main.createModifiedJSFile(req.body['fname'], req.body.jsFileContent);
       
       if (modifiedJsFilePath) {
-        console.log(`Successfully created modified JS file: ${modifiedJsFilePath}`);
+        // console.log(`Successfully created modified JS file: ${modifiedJsFilePath}`);
         
         // Verify file exists and get its content
         if (fs.existsSync(modifiedJsFilePath)) {
-          console.log(`Verified: Modified JS file exists at path: ${modifiedJsFilePath}`);
           modifiedJsContent = fs.readFileSync(modifiedJsFilePath, 'utf8');
-          console.log(`File size: ${modifiedJsContent.length} bytes`);
-          console.log(`File preview: ${modifiedJsContent.substring(0, 100)}...`);
           
           // DIRECTLY create the file in the pkg directory
           const pkgDir = path.join(result);
-          console.log(`Package directory: ${pkgDir}`);
           
           // List files in the pkg directory to debug
-          console.log('Files in pkg directory:');
+          // console.log('Files in pkg directory:');
           fs.readdirSync(pkgDir).forEach(file => {
-            console.log(`- ${file}`);
+            // console.log(`- ${file}`);
           });
           
           // Write file directly to pkg directory
           const destFile = path.join(pkgDir, `${req.body['fname']}_modified.js`);
           fs.writeFileSync(destFile, modifiedJsContent);
-          console.log(`Directly wrote modified JS file to pkg directory: ${destFile}`);
+          // console.log(`Directly wrote modified JS file to pkg directory: ${destFile}`);
           
           // Also create a version with the original filename if provided
           if (req.body.jsFileName) {
             const originalNameFile = path.join(pkgDir, req.body.jsFileName);
             fs.writeFileSync(originalNameFile, modifiedJsContent);
-            console.log(`Also wrote file with original name: ${originalNameFile}`);
+            // console.log(`Also wrote file with original name: ${originalNameFile}`);
           }
           
           // Double-check the file exists
           if (fs.existsSync(destFile)) {
-            console.log(`Verified: Modified JS file exists in pkg directory`);
+            // console.log(`Verified: Modified JS file exists in pkg directory`);
           } else {
             console.error(`ERROR: Failed to create file in pkg directory`);
           }
@@ -170,26 +166,19 @@ app.post('/generate', async (req, res) => {
         // Append files from the package directory
       archive.directory(pkgPath, false);      // Add the modified JavaScript file if it exists - no longer needed as we're putting it directly in pkg dir
       // The following code is for debugging purposes mainly
-      console.log('--------------------------------');
-      console.log('FILES IN PACKAGE DIRECTORY (before archiving):');
       const pkgFiles = fs.readdirSync(pkgPath);
       pkgFiles.forEach(file => {
         const fileStat = fs.statSync(path.join(pkgPath, file));
-        console.log(`- ${file} (${fileStat.size} bytes)`);
       });
-      console.log('--------------------------------');
       
       // Check for specific modified JS files
       const modifiedJsFile = path.join(pkgPath, `${req.body['fname']}_modified.js`);
       if (fs.existsSync(modifiedJsFile)) {
-        console.log(`FOUND modified JS file in pkg dir: ${modifiedJsFile}`);
       } else {
-        console.log(`Modified JS file NOT found in pkg dir: ${modifiedJsFile}`);
         // If we have content, try writing it one more time
         if (modifiedJsContent) {
           try {
             fs.writeFileSync(modifiedJsFile, modifiedJsContent);
-            console.log(`Created modified JS file in pkg dir as last resort: ${modifiedJsFile}`);
           } catch (lastError) {
             console.error(`Final attempt to create modified JS file failed:`, lastError);
           }
@@ -200,14 +189,11 @@ app.post('/generate', async (req, res) => {
       if (req.body.jsFileName) {
         const originalFile = path.join(pkgPath, req.body.jsFileName);
         if (fs.existsSync(originalFile)) {
-          console.log(`FOUND original named JS file in pkg dir: ${originalFile}`);
         } else {
-          console.log(`Original named JS file NOT found in pkg dir: ${originalFile}`);
           // If we have content, try writing it one more time
           if (modifiedJsContent) {
             try {
               fs.writeFileSync(originalFile, modifiedJsContent);
-              console.log(`Created original named JS file in pkg dir as last resort: ${originalFile}`);
             } catch (lastError) {
               console.error(`Final attempt to create original named JS file failed:`, lastError);
             }
@@ -286,7 +272,7 @@ The WebAssembly version should offer better performance for computationally inte
       // archive.append(readmeContent, { name: 'README.md' });
       
       // Final check: add any missing files directly to the archive
-      console.log('FINAL CHECK: Adding files directly to the archive if needed');
+      // console.log('FINAL CHECK: Adding files directly to the archive if needed');
       
       // Add modified JS file directly to the archive if needed
       // if (modifiedJsContent) {
