@@ -27,6 +27,18 @@
     </div>
 
     <script>
+        // Restore file content and name from sessionStorage if not present
+        if (!window.selectedJsFileContent) {
+            window.selectedJsFileContent = sessionStorage.getItem('selectedJsFileContent') || "";
+        }
+        if (!window.selectedJsFileName) {
+            window.selectedJsFileName = sessionStorage.getItem('selectedJsFileName') || "";
+        }
+        console.log("Restored from sessionStorage:", {
+            selectedJsFileName: window.selectedJsFileName,
+            selectedJsFileContent: window.selectedJsFileContent ? window.selectedJsFileContent.substring(0, 100) + (window.selectedJsFileContent.length > 100 ? "..." : "") : ""
+        });
+
         function getQueryParam(param) {
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get(param);
@@ -53,16 +65,26 @@
         function compile() {
             const rustCode = document.getElementById("rustEditor").value;
             const functionName = getQueryParam("name");
+            // Get the selected JS file content and name from global variable
+            const jsFileContent = window.selectedJsFileContent || "";
+            const jsFileName = window.selectedJsFileName || "";
+
+            // Show a preview in the console
+            const preview = jsFileContent.length > 100 ? jsFileContent.substring(0, 100) + '...' : jsFileContent;
+            console.log(`Selected JS file: ${jsFileName}`);
+            console.log('JS file preview:', preview);
 
             if (!rustCode.trim()) {
                 alert("Please write some Rust code before compiling.");
                 return;
-            }
-
+            }            // Log the complete payload for debugging
+            const payload = { fname: functionName, wasm: rustCode, jsFileName, jsFileContent };
+            console.log('Sending payload to backend:', payload);
+            
             fetch('/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fname: functionName, wasm: rustCode })
+                body: JSON.stringify(payload)
             })
             .then(response => {
                 if (response.ok) {

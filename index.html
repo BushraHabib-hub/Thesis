@@ -34,6 +34,13 @@ async function analyzeFile() {
     
     const file = fileInput.files[0];
     fileContent = await file.text();
+    // Store the file content globally for later use
+    window.selectedJsFileContent = fileContent;
+    window.selectedJsFileName = file.name;
+    // Save to sessionStorage for persistence across page navigation
+    sessionStorage.setItem('selectedJsFileContent', fileContent);
+    sessionStorage.setItem('selectedJsFileName', file.name);
+    console.log('Selected JS file content stored globally:', window.selectedJsFileContent.substring(0, 100));
     
     if (file.name.endsWith('.html')) {
         fileContent = extractJSFromHTML(fileContent);
