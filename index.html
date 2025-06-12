@@ -40,7 +40,7 @@ async function analyzeFile() {
     // Save to sessionStorage for persistence across page navigation
     sessionStorage.setItem('selectedJsFileContent', fileContent);
     sessionStorage.setItem('selectedJsFileName', file.name);
-    console.log('Selected JS file content stored globally:', window.selectedJsFileContent.substring(0, 100));
+    // console.log('Selected JS file content stored globally:', window.selectedJsFileContent.substring(0, 100));
     
     if (file.name.endsWith('.html')) {
         fileContent = extractJSFromHTML(fileContent);
@@ -62,15 +62,107 @@ function analyzeCode(code) {
     output.innerHTML = '';
     functionPerformance = [];
     
-    const parsed = esprima.parseScript(code, { tolerant: true, loc: true });
+    // First, try to process the file as-is
+    let parsed;
+    try {
+        parsed = esprima.parseScript(code, { tolerant: true, loc: true });
+    } catch (e) {
+        // If parsing fails, try to remove async/await keywords and parse again
+        console.log("Initial parse failed, attempting to sanitize code:", e);
+        
+        // Replace 'async function' with just 'function' and 'await' with ''
+        const sanitizedCode = code
+            .replace(/async\s+function/g, 'function')
+            .replace(/await\s+/g, '');
+        
+        try {
+            parsed = esprima.parseScript(sanitizedCode, { tolerant: true, loc: true });
+            output.innerHTML = `
+                <div class="p-2 mb-2 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+                    <p>Note: Used simplified parsing to handle modern JavaScript features.</p>
+                </div>
+            `;
+        } catch (e2) {
+            // If still failing, go through line by line and extract function declarations 
+            console.log("Sanitized parse failed too, using fallback method:", e2);
+            
+            // Create an empty AST-like structure
+            parsed = { body: [] };
+            
+            // Add a warning to the output
+            output.innerHTML = `
+                <div class="p-2 mb-2 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+                    <p>Note: Used basic function detection due to complex JavaScript syntax.</p>
+                </div>
+            `;
+              // Use regex to find functions in the code - with improved pattern
+            const functionRegex = /(?:function|async function)\s+([a-zA-Z0-9_$]+)\s*\([^)]*\)\s*\{/g;
+            let match;
+            
+            while ((match = functionRegex.exec(code)) !== null) {
+                const name = match[1];
+                const lineCount = code.substring(0, match.index).split('\n').length;
+                
+                // Add function declaration nodes manually
+                parsed.body.push({
+                    type: 'FunctionDeclaration',
+                    id: { name: name },
+                    loc: { start: { line: lineCount } }
+                });
+            }
+        }
+    }
     
     function traverse(node) {
-        if (node.type === 'FunctionDeclaration') {
-            functionPerformance.push({ name: node.id.name, loc: node.loc.start.line, time: 0 });
-        } else if (node.type === 'VariableDeclarator' && node.init && node.init.type === 'FunctionExpression') {
-            functionPerformance.push({ name: node.id.name, loc: node.loc.start.line, time: 0 });
-        } else if (node.type === 'MethodDefinition') {
-            functionPerformance.push({ name: node.key.name, loc: node.loc.start.line, time: 0 });
+        // Regular function declarations: function name() {}
+        if (node.type === 'FunctionDeclaration' && node.id) {
+            functionPerformance.push({ 
+                name: node.id.name, 
+                loc: node.loc.start.line, 
+                time: 0,
+                type: 'function'
+            });
+        } 
+        // Variable declarations with function expressions: const name = function() {}
+        else if (node.type === 'VariableDeclarator' && node.id && node.init) {
+            if (node.init.type === 'FunctionExpression') {
+                functionPerformance.push({ 
+                    name: node.id.name, 
+                    loc: node.loc.start.line, 
+                    time: 0,
+                    type: 'function-expression'
+                });
+            }
+            // Arrow functions: const name = () => {}
+            else if (node.init.type === 'ArrowFunctionExpression') {
+                functionPerformance.push({ 
+                    name: node.id.name, 
+                    loc: node.loc.start.line, 
+                    time: 0,
+                    type: 'arrow-function'
+                });
+            }
+        } 
+        // Class methods: class X { method() {} }
+        else if (node.type === 'MethodDefinition' && node.key) {
+            functionPerformance.push({ 
+                name: node.key.name, 
+                loc: node.loc.start.line, 
+                time: 0,
+                type: 'method'
+            });
+        }
+        // Object methods: const obj = { method() {} }
+        else if (node.type === 'Property' && node.key && node.value &&
+                (node.value.type === 'FunctionExpression' || node.value.type === 'ArrowFunctionExpression')) {
+            // Use key name if possible, otherwise mark as anonymous
+            const name = node.key.name || node.key.value || 'anonymous';
+            functionPerformance.push({ 
+                name: name, 
+                loc: node.loc.start.line, 
+                time: 0,
+                type: 'object-method'
+            });
         }
         
         for (let key in node) {
@@ -90,48 +182,151 @@ function analyzeCode(code) {
 }
 
 function measureExecutionTime(func) {
-    const regex = new RegExp(`function\\s+${func.name}\\s*\\(([^)]*)\\)\\s*{([\\s\\S]*?)}\\s*$`, 'm');
-    const match = fileContent.match(regex);
+    // Use a more robust approach to extract the full function content
+    // by finding the function declaration and then manually tracking braces
+    const functionRegex = new RegExp(`function\\s+${func.name}\\s*\\([^)]*\\)\\s*{`, 'g');
+    const startMatch = functionRegex.exec(fileContent);
     
-    if (match) {
-        const functionContent = match[0];
+    if (startMatch) {
+        const startIndex = startMatch.index;
+        let braceCount = 1; // Start with 1 for the opening brace
+        let endIndex = startIndex + startMatch[0].length;
         
-        try {
+        // Find the matching closing brace by tracking brace count
+        while (braceCount > 0 && endIndex < fileContent.length) {
+            const char = fileContent[endIndex];
+            if (char === '{') braceCount++;
+            if (char === '}') braceCount--;
+            endIndex++;
+        }
+        
+        // Extract the complete function content
+        const functionContent = fileContent.substring(startIndex, endIndex);
+        const paramsMatch = functionContent.match(/function\s+\w+\s*\((.*?)\)/);
+        const params = paramsMatch ? paramsMatch[1].split(',').map(p => p.trim()) : [];
+        
+        try {            // Create a sandbox environment with mock objects and values to prevent common errors
+            const sandboxSetup = `
+                // Mock common objects and variables to prevent errors
+                const mockObj = { 
+                    length: 10, 
+                    0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 
+                    forEach: function(){}, 
+                    map: function(){ return []; },
+                    push: function(){},
+                    find: function(){ return {}; }
+                };
+                
+                // Mock common functions and variables that might be referenced
+                const document = { 
+                    getElementById: function(){ return { innerHTML: '', style: {} }; },
+                    createElement: function(){ return { appendChild: function(){}, style: {} }; },
+                    body: { appendChild: function(){} }
+                };
+                const window = { addEventListener: function(){} };
+                const console = { log: function(){} };
+                const self_ = {};
+                
+                // Use mock_ prefix to avoid name conflicts with actual functions
+                let mock_getBoundCoords = function(){ return { x: 0, y: 0, width: 100, height: 100 }; };
+                let mock_getDataRows = function(){ return mockObj; };
+                let row = mockObj;
+                let options = { legend: {}, tooltip: {}, series: {} };
+                let data = mockObj;
+                let chart = { setSelection: function(){} };
+                
+                // Add more mock objects and functions as needed
+            `;
+            
+            // Instead of just evaluating the function, we'll create a new function in a sandbox
+            // that contains necessary mocks, the original function, and then calls it            // Create sanitized versions of needed functions
+            const sanitizedContent = functionContent.replace(/getBoundCoords_/g, "mock_getBoundCoords")
+                                                 .replace(/getDataRows_/g, "mock_getDataRows");
+            
+            const wrappedFunction = new Function(`
+                // Setup sandbox environment
+                ${sandboxSetup}
+                
+                // Define the function
+                ${functionContent};
+                
+                // Measure the execution time of the actual function call
+                return function() {
+                    try {
+                        // Time the function execution
+                        return ${func.name}.apply(this, arguments);
+                    } catch(e) {
+                        // Silently catch errors - we're just measuring code complexity, not execution success
+                        return null;
+                    }
+                }
+            `);
+            
+            // Create a callable version of the function
+            const executableFunction = wrappedFunction();
+            
+            // Create smart mock arguments based on parameter names
+            const mockArgs = params.map(param => {
+                if (param.includes('element') || param.includes('el')) return { style: {}, innerHTML: '' };
+                if (param.includes('data')) return [{ value: 1 }, { value: 2 }];
+                if (param.includes('options')) return { series: {}, legend: {} };
+                if (param.includes('event')) return { preventDefault: () => {}, target: {} };
+                return {}; // Default mock object
+            });
+            
             // Run the function 3 times and calculate average
             let totalTime = 0;
             const iterations = 3;
+            let errorsOccurred = false;
             
             for (let i = 0; i < iterations; i++) {
                 const startTime = performance.now();
-                eval(functionContent);
+                // Call the wrapped function with mock arguments
+                try {
+                    executableFunction(...mockArgs);
+                } catch (callError) {
+                    // Just count errors but continue measuring
+                    errorsOccurred = true;
+                }
                 const endTime = performance.now();
                 totalTime += (endTime - startTime);
-            }
-            
-            // Calculate average time
+            }              // Calculate average time even if errors occurred
+            // We'll just record the execution time regardless of errors
             func.time = totalTime / iterations;
+            
+            // Only mark functions as removable if they caused catastrophic errors
+            if (errorsOccurred && func.name.includes('Wasm') || func.name.includes('async')) {
+                func.remove = true;
+            }
         } catch (e) {
-            func.time = Number.MAX_VALUE; // Assign max value if function has an error
+            console.log(`Error setting up function ${func.name}:`, e);
+            // Mark this function to be removed
+            func.remove = true;
         }
     } else {
-        func.time = Number.MAX_VALUE;
+        // Mark function as to be removed if it couldn't be found
+        func.remove = true;
     }
-    
-    if (functionPerformance.every(f => f.time !== 0)) {
+      // Check if all functions have been measured or marked for removal
+    if (functionPerformance.every(f => f.time !== 0 || f.remove === true)) {
+        // Filter out any functions with errors or execution issues before displaying results
+        functionPerformance = functionPerformance.filter(f => !f.remove);
         displayResults();
     }
 }
 
 function displayResults() {
-    functionPerformance.sort((a, b) => b.time - a.time);
-    const output = document.getElementById('output');
-    output.innerHTML = '<h2 class="text-lg font-bold mb-2">Function Performance (Average of 3 runs)</h2>';
+    const output = document.getElementById('output');    
+    output.innerHTML = '<h2 class="text-lg font-bold mb-2">Function Performance (After Averaging)</h2>';
     
-    functionPerformance.forEach(func => {
+    //output.innerHTML += `<div class="mb-2">Successfully measured ${functionPerformance.length} functions</div>`;
+    functionPerformance.sort((a, b) => b.time - a.time);
+    functionPerformance.forEach((func, index) => {
+        const isHighlighted = index < 3; // Highlight the first 3 functions
         output.innerHTML += `
             <div class="text-gray-700 ${func.time > 100 ? 'slow' : ''}">
                 <button onclick="handleClick('${func.name}')" class="underline text-blue-500">
-                    ${func.name} (Line ${func.loc}) - ${func.time.toFixed(4)} ms
+                    ${isHighlighted ? '<strong>' : ''}${func.name}${isHighlighted ? '</strong>' : ''} (Line ${func.loc}) - ${func.time.toFixed(4)} ms
                 </button>
             </div>
         `;
